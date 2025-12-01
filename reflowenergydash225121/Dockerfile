@@ -21,9 +21,6 @@ FROM nginx:alpine
 # Copy built files from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy CSV data to be served statically
-COPY --from=builder /app/src/data /usr/share/nginx/html/src/data
-
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
