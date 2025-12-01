@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+  }
+
+  * {
+    @apply border-dark-700;
+  }
+
+  body {
+    @apply bg-dark-950 text-dark-100 antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dark-600 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-dark-500;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-dark-900/50 backdrop-blur-sm border border-dark-700/50 rounded-xl p-4 shadow-xl;
+  }
+
+  .card-header {
+    @apply text-lg font-semibold text-dark-100 mb-4 flex items-center gap-2;
+  }
+
+  .stat-card {
+    @apply card hover:border-primary-500/30 transition-all duration-300;
+  }
+
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 justify-center;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 hover:bg-primary-700 text-white;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger-600 hover:bg-danger-700 text-white;
+  }
+
+  .btn-outline {
+    @apply btn border border-dark-600 hover:border-primary-500 hover:bg-primary-500/10 text-dark-200;
+  }
+
+  .input {
+    @apply w-full px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full;
+  }
+
+  .badge-success {
+    @apply badge bg-success-500/20 text-success-400 border border-success-500/30;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning-500/20 text-warning-400 border border-warning-500/30;
+  }
+
+  .badge-danger {
+    @apply badge bg-danger-500/20 text-danger-400 border border-danger-500/30;
+  }
+
+  .badge-info {
+    @apply badge bg-primary-500/20 text-primary-400 border border-primary-500/30;
+  }
+
+  .anomaly-critical {
+    @apply bg-danger-500/10 border-danger-500/30;
+  }
+
+  .anomaly-warning {
+    @apply bg-warning-500/10 border-warning-500/30;
+  }
+
+  .anomaly-normal {
+    @apply bg-success-500/10 border-success-500/30;
+  }
+
+  .tooltip {
+    @apply absolute z-50 px-3 py-2 text-sm bg-dark-800 text-dark-100 rounded-lg shadow-xl border border-dark-600 whitespace-nowrap;
+  }
+}
+
+@layer utilities {
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient 3s ease infinite;
+  }
+
+  @keyframes gradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .glass {
+    @apply bg-dark-900/30 backdrop-blur-md;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-400 to-primary-600;
+  }
+}
