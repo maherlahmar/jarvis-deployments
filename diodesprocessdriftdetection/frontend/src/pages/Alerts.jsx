@@ -1,409 +1,369 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
   AlertTriangle,
-  AlertCircle,
-  Info,
-  CheckCircle,
-  X,
+  Check,
+  MapPin,
+  Building2,
+  Shield,
+  CloudRain,
   Filter,
-  Search,
-  Clock,
-  ArrowUpDown
+  X
 } from 'lucide-react';
-import useStore from '../store/useStore';
-import websocketService from '../services/websocket';
 import { api } from '../services/api';
-import { formatRelativeTime, formatDateTime, formatTimestamp } from '../utils/formatters';
-import clsx from 'clsx';
+import useStore from '../store/useStore';
+import { getPriorityBadgeClass, formatDate } from '../utils/helpers';
 
-function Alerts() {
-  const { alerts, acknowledgeAlert, parameters } = useStore();
-  const [filter, setFilter] = useState('all');
-  const [severityFilter, setSeverityFilter] = useState('all');
-  const [parameterFilter, setParameterFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortOrder, setSortOrder] = useState('newest');
-  const [selectedAlert, setSelectedAlert] = useState(null);
+const alertTypeIcons = {
+  'concentration_risk': MapPin,
+  'high_risk_supplier': AlertTriangle,
+  'single_source': Building2,
+  'esg_concern': Shield,
+  'natural_disaster': CloudRain
+};
 
-  const parameterKeys = Object.keys(parameters);
+const alertTypeLabels = {
+  'concentration_risk': 'Geographic Concentration',
+  'high_risk_supplier': 'High Risk Supplier',
+  'single_source': 'Single Source',
+  'esg_concern': 'ESG Concern',
+  'natural_disaster': 'Natural Disaster'
+};
 
-  const filteredAlerts = useMemo(() => {
-    let result = [...alerts];
+function AlertCard({ alert, onResolve }) {
+  const [resolving, setResolving] = useState(false);
+  const Icon = alertTypeIcons[alert.alert_type] || AlertTriangle;
 
-    if (filter === 'unacknowledged') {
-      result = result.filter(a => !a.acknowledged);
-    } else if (filter === 'acknowledged') {
-      result = result.filter(a => a.acknowledged);
-    }
-
-    if (severityFilter !== 'all') {
-      result = result.filter(a => a.severity === severityFilter);
-    }
-
-    if (parameterFilter !== 'all') {
-      result = result.filter(a => a.parameter === parameterFilter);
-    }
-
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(a =>
-        a.message?.toLowerCase().includes(term) ||
-        a.parameterName?.toLowerCase().includes(term) ||
-        a.line?.toLowerCase().includes(term) ||
-        a.type?.toLowerCase().includes(term)
-      );
-    }
-
-    result.sort((a, b) => {
-      if (sortOrder === 'newest') return b.timestamp - a.timestamp;
-      if (sortOrder === 'oldest') return a.timestamp - b.timestamp;
-      if (sortOrder === 'severity') {
-        const severityOrder = { critical: 0, warning: 1, info: 2 };
-        return severityOrder[a.severity] - severityOrder[b.severity];
-      }
-      return 0;
-    });
-
-    return result;
-  }, [alerts, filter, severityFilter, parameterFilter, searchTerm, sortOrder]);
-
-  const handleAcknowledge = async (alertId) => {
+  const handleResolve = async () => {
+    setResolving(true);
     try {
-      websocketService.acknowledgeAlert(alertId);
-      await api.acknowledgeAlert(alertId);
-      acknowledgeAlert(alertId);
+      await api.resolveAlert(alert.id);
+      onResolve(alert.id);
     } catch (error) {
-      console.error('Failed to acknowledge:', error);
-      acknowledgeAlert(alertId);
+      console.error('Failed to resolve alert:', error);
+    } finally {
+      setResolving(false);
     }
   };
 
-  const handleAcknowledgeAll = async () => {
-    const unacknowledged = filteredAlerts.filter(a => !a.acknowledged);
-    for (const alert of unacknowledged) {
-      await handleAcknowledge(alert.id);
-    }
+  const severityColors = {
+    Critical: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+    High: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+    Medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+    Low: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/30' }
   };
 
-  const getSeverityIcon = (severity) => {
-    switch (severity) {
-      case 'critical': return AlertTriangle;
-      case 'warning': return AlertCircle;
-      default: return Info;
-    }
-  };
-
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'critical': return 'text-danger-500 bg-danger-500/10';
-      case 'warning': return 'text-warning-500 bg-warning-500/10';
-      default: return 'text-primary-500 bg-primary-500/10';
-    }
-  };
-
-  const getTypeLabel = (type) => {
-    const labels = {
-      OUT_OF_SPEC: 'Out of Spec',
-      OUT_OF_CONTROL: 'Out of Control',
-      CUSUM_DRIFT: 'CUSUM Drift',
-      EWMA_DRIFT: 'EWMA Drift',
-      TREND: 'Trend Detected',
-      PROCESS_SHIFT: 'Process Shift'
-    };
-    return labels[type] || type;
-  };
-
-  const getRecommendedActions = (type) => {
-    const actions = {
-      OUT_OF_SPEC: [
-        'Stop production immediately',
-        'Isolate affected batch for review',
-        'Check equipment calibration',
-        'Review recent process changes'
-      ],
-      OUT_OF_CONTROL: [
-        'Monitor closely for next 10 readings',
-        'Verify sensor readings',
-        'Check for environmental changes'
-      ],
-      CUSUM_DRIFT: [
-        'Investigate root cause',
-        'Check for equipment degradation',
-        'Review consumable status'
-      ],
-      EWMA_DRIFT: [
-        'Monitor trend development',
-        'Check for systematic errors',
-        'Review recent recipe changes'
-      ],
-      TREND: [
-        'Track trend progression',
-        'Identify potential causes',
-        'Plan preventive action'
-      ],
-      PROCESS_SHIFT: [
-        'Investigate sudden change',
-        'Check for equipment malfunction',
-        'Review maintenance history'
-      ]
-    };
-    return actions[type] || ['Investigate the issue'];
-  };
-
-  const alertCounts = {
-    total: alerts.length,
-    unacknowledged: alerts.filter(a => !a.acknowledged).length,
-    critical: alerts.filter(a => a.severity === 'critical' && !a.acknowledged).length,
-    warning: alerts.filter(a => a.severity === 'warning' && !a.acknowledged).length
-  };
+  const colors = severityColors[alert.severity] || severityColors.Medium;
 
   return (
-    <div className="space-y-6 animate-in">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="card p-4 border-l-4 border-l-slate-500">
-          <p className="text-sm text-slate-500 mb-1">Total Alerts</p>
-          <p className="text-2xl font-bold text-slate-900 dark:text-white">{alertCounts.total}</p>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -100 }}
+      className={`card border ${alert.is_resolved ? 'opacity-60' : colors.border}`}
+    >
+      <div className="p-4 flex items-start gap-4">
+        <div className={`p-2 rounded-lg ${colors.bg}`}>
+          <Icon className={`w-5 h-5 ${colors.text}`} />
         </div>
-        <div className="card p-4 border-l-4 border-l-warning-500">
-          <p className="text-sm text-slate-500 mb-1">Unacknowledged</p>
-          <p className="text-2xl font-bold text-warning-500">{alertCounts.unacknowledged}</p>
-        </div>
-        <div className="card p-4 border-l-4 border-l-danger-500">
-          <p className="text-sm text-slate-500 mb-1">Critical</p>
-          <p className="text-2xl font-bold text-danger-500">{alertCounts.critical}</p>
-        </div>
-        <div className="card p-4 border-l-4 border-l-warning-500">
-          <p className="text-sm text-slate-500 mb-1">Warnings</p>
-          <p className="text-2xl font-bold text-warning-500">{alertCounts.warning}</p>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-semibold text-white">{alert.title}</h3>
+                <span className={`badge ${getPriorityBadgeClass(alert.severity)}`}>
+                  {alert.severity}
+                </span>
+                {alert.is_resolved && (
+                  <span className="badge bg-green-500/20 text-green-400 border-green-500/30">
+                    Resolved
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mt-1">
+                {alertTypeLabels[alert.alert_type] || alert.alert_type}
+              </p>
+            </div>
+            {!alert.is_resolved && (
+              <button
+                onClick={handleResolve}
+                disabled={resolving}
+                className="btn btn-secondary text-sm flex items-center gap-1"
+              >
+                {resolving ? (
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Resolve
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+          <p className="text-gray-300 mt-3">{alert.message}</p>
+          <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
+            {alert.supplier_id && (
+              <Link
+                to={`/suppliers/${alert.supplier_id}`}
+                className="flex items-center gap-1 hover:text-blue-400"
+              >
+                <Building2 className="w-3 h-3" />
+                {alert.supplier_id}
+              </Link>
+            )}
+            {alert.country && (
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {alert.country}
+              </span>
+            )}
+            {alert.created_at && (
+              <span>{formatDate(alert.created_at)}</span>
+            )}
+          </div>
         </div>
       </div>
+    </motion.div>
+  );
+}
 
-      <div className="card p-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <span className="text-sm text-slate-600 dark:text-slate-400">Filters:</span>
+export default function Alerts() {
+  const { alerts, setAlerts, resolveAlert } = useStore();
+  const [loading, setLoading] = useState(true);
+  const [severityFilter, setSeverityFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [showResolved, setShowResolved] = useState(false);
+
+  useEffect(() => {
+    async function fetchAlerts() {
+      setLoading(true);
+      try {
+        const params = {};
+        if (severityFilter) params.severity = severityFilter;
+        if (typeFilter) params.type = typeFilter;
+        if (!showResolved) params.resolved = 'false';
+        const data = await api.getAlerts(params);
+        setAlerts(data);
+      } catch (error) {
+        console.error('Failed to fetch alerts:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAlerts();
+  }, [severityFilter, typeFilter, showResolved, setAlerts]);
+
+  const handleResolve = (id) => {
+    resolveAlert(id);
+    if (!showResolved) {
+      setAlerts(alerts.filter(a => a.id !== id));
+    }
+  };
+
+  const activeAlerts = alerts.filter(a => !a.is_resolved);
+  const criticalAlerts = activeAlerts.filter(a => a.severity === 'Critical');
+  const highAlerts = activeAlerts.filter(a => a.severity === 'High');
+
+  const alertTypes = [...new Set(alerts.map(a => a.alert_type))];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-white">Alerts & Notifications</h1>
+        <p className="text-gray-400 mt-1">
+          Monitor supply chain risks and critical events
+        </p>
+      </div>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card p-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-500/20 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-white">{activeAlerts.length}</p>
+              <p className="text-sm text-gray-400">Active Alerts</p>
+            </div>
           </div>
+        </motion.div>
 
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="select w-40"
-          >
-            <option value="all">All Alerts</option>
-            <option value="unacknowledged">Unacknowledged</option>
-            <option value="acknowledged">Acknowledged</option>
-          </select>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="card p-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-500/20 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-white">{criticalAlerts.length}</p>
+              <p className="text-sm text-gray-400">Critical</p>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="card p-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-orange-500/20 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-orange-400" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-white">{highAlerts.length}</p>
+              <p className="text-sm text-gray-400">High Priority</p>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="card p-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-500/20 rounded-lg">
+              <Check className="w-5 h-5 text-green-400" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-white">
+                {alerts.filter(a => a.is_resolved).length}
+              </p>
+              <p className="text-sm text-gray-400">Resolved</p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Filters */}
+      <div className="card p-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-400">Filters:</span>
+          </div>
 
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
             className="select w-36"
           >
-            <option value="all">All Severity</option>
-            <option value="critical">Critical</option>
-            <option value="warning">Warning</option>
-            <option value="info">Info</option>
+            <option value="">All Severity</option>
+            <option value="Critical">Critical</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
           </select>
 
           <select
-            value={parameterFilter}
-            onChange={(e) => setParameterFilter(e.target.value)}
-            className="select w-44"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="select w-48"
           >
-            <option value="all">All Parameters</option>
-            {parameterKeys.map(key => (
-              <option key={key} value={key}>{parameters[key]?.name}</option>
+            <option value="">All Types</option>
+            {alertTypes.map(type => (
+              <option key={type} value={type}>
+                {alertTypeLabels[type] || type}
+              </option>
             ))}
           </select>
 
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
-              type="text"
-              placeholder="Search alerts..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input pl-10"
+              type="checkbox"
+              checked={showResolved}
+              onChange={(e) => setShowResolved(e.target.checked)}
+              className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
             />
-          </div>
+            <span className="text-sm text-gray-300">Show resolved</span>
+          </label>
 
-          <select
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value)}
-            className="select w-36"
-          >
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="severity">By Severity</option>
-          </select>
-
-          {alertCounts.unacknowledged > 0 && (
+          {(severityFilter || typeFilter) && (
             <button
-              onClick={handleAcknowledgeAll}
-              className="btn-secondary flex items-center gap-2"
+              onClick={() => { setSeverityFilter(''); setTypeFilter(''); }}
+              className="flex items-center gap-1 text-sm text-gray-400 hover:text-white"
             >
-              <CheckCircle className="w-4 h-4" />
-              Acknowledge All ({filteredAlerts.filter(a => !a.acknowledged).length})
+              <X className="w-4 h-4" />
+              Clear
             </button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 card">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-            <h3 className="font-semibold text-slate-900 dark:text-white">
-              Alert History ({filteredAlerts.length})
-            </h3>
-          </div>
-          <div className="max-h-[600px] overflow-y-auto scrollbar-thin">
-            {filteredAlerts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                <CheckCircle className="w-12 h-12 mb-2 text-success-500" />
-                <p>No alerts match your filters</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                {filteredAlerts.map(alert => {
-                  const Icon = getSeverityIcon(alert.severity);
-                  const colorClass = getSeverityColor(alert.severity);
-                  const isSelected = selectedAlert?.id === alert.id;
-
-                  return (
-                    <div
-                      key={alert.id}
-                      onClick={() => setSelectedAlert(alert)}
-                      className={clsx(
-                        'p-4 cursor-pointer transition-colors',
-                        isSelected ? 'bg-primary-50 dark:bg-primary-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
-                        alert.acknowledged && 'opacity-60'
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={clsx('p-2 rounded-lg', colorClass)}>
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="font-medium text-slate-900 dark:text-white">
-                                {alert.parameterName}
-                              </p>
-                              <p className="text-sm text-slate-500 mt-0.5">{alert.message}</p>
-                            </div>
-                            {!alert.acknowledged && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAcknowledge(alert.id);
-                                }}
-                                className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {formatRelativeTime(alert.timestamp)}
-                            </span>
-                            <span>{alert.line}</span>
-                            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700">
-                              {getTypeLabel(alert.type)}
-                            </span>
-                            {alert.acknowledged && (
-                              <span className="text-success-500">Acknowledged</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+      {/* Alerts List */}
+      {loading ? (
+        <div className="h-64 flex items-center justify-center">
+          <div className="spinner"></div>
         </div>
-
+      ) : alerts.length === 0 ? (
+        <div className="h-64 flex flex-col items-center justify-center text-gray-400">
+          <Check className="w-12 h-12 mb-4 text-green-400" />
+          <p className="text-lg font-medium">All clear!</p>
+          <p className="text-sm mt-1">No active alerts at this time</p>
+        </div>
+      ) : (
         <div className="space-y-4">
-          {selectedAlert ? (
-            <>
-              <div className="card p-4">
-                <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Alert Details</h3>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Parameter</p>
-                    <p className="font-medium text-slate-900 dark:text-white">{selectedAlert.parameterName}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Type</p>
-                    <p className="font-medium text-slate-900 dark:text-white">{getTypeLabel(selectedAlert.type)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Severity</p>
-                    <span className={clsx(
-                      'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                      selectedAlert.severity === 'critical' ? 'bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400' :
-                      selectedAlert.severity === 'warning' ? 'bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400' :
-                      'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                    )}>
-                      {selectedAlert.severity.charAt(0).toUpperCase() + selectedAlert.severity.slice(1)}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Line</p>
-                    <p className="font-medium text-slate-900 dark:text-white">{selectedAlert.line}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Time</p>
-                    <p className="font-medium text-slate-900 dark:text-white">{formatDateTime(selectedAlert.timestamp)}</p>
-                  </div>
-                  {selectedAlert.value !== undefined && (
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">Value</p>
-                      <p className="font-medium text-slate-900 dark:text-white">
-                        {selectedAlert.value.toFixed(4)} {parameters[selectedAlert.parameter]?.unit}
-                      </p>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Status</p>
-                    <p className={clsx(
-                      'font-medium',
-                      selectedAlert.acknowledged ? 'text-success-500' : 'text-warning-500'
-                    )}>
-                      {selectedAlert.acknowledged ? 'Acknowledged' : 'Pending'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="card p-4">
-                <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Recommended Actions</h3>
-                <ul className="space-y-2">
-                  {getRecommendedActions(selectedAlert.type).map((action, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className="w-5 h-5 flex items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 text-xs font-medium">
-                        {i + 1}
-                      </span>
-                      <span className="text-slate-600 dark:text-slate-400">{action}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </>
-          ) : (
-            <div className="card p-8 text-center">
-              <AlertCircle className="w-12 h-12 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
-              <p className="text-slate-500">Select an alert to view details</p>
-            </div>
-          )}
+          {alerts.map((alert) => (
+            <AlertCard
+              key={alert.id}
+              alert={alert}
+              onResolve={handleResolve}
+            />
+          ))}
         </div>
-      </div>
+      )}
+
+      {/* Quick Actions */}
+      {activeAlerts.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card p-6"
+        >
+          <h3 className="font-semibold text-white mb-4">Recommended Actions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {criticalAlerts.length > 0 && (
+              <Link
+                to="/recommendations?priority=Critical"
+                className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-colors"
+              >
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+                <div>
+                  <span className="text-white font-medium">Address Critical Risks</span>
+                  <p className="text-sm text-gray-400">
+                    {criticalAlerts.length} critical alert{criticalAlerts.length > 1 ? 's' : ''} require immediate attention
+                  </p>
+                </div>
+              </Link>
+            )}
+            <Link
+              to="/concentration"
+              className="flex items-center gap-3 p-4 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              <MapPin className="w-5 h-5 text-blue-400" />
+              <div>
+                <span className="text-white font-medium">Review Geographic Risk</span>
+                <p className="text-sm text-gray-400">Analyze concentration patterns</p>
+              </div>
+            </Link>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }
-
-export default Alerts;

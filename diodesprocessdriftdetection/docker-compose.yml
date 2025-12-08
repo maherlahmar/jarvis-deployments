@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=supplychain
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    networks:
+      - internal
+
   backend:
     build:
       context: ./backend
@@ -10,9 +23,15 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8000
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=supplychain
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      - db
     networks:
       - internal
-    restart: unless-stopped
 
   frontend:
     build:
@@ -27,12 +46,14 @@ services:
       - coolify
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-app}.rule=Host(`${COOLIFY_FQDN:-localhost}`)"
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-app}.entrypoints=http,https"
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-app}.tls=true"
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-app}.tls.certresolver=letsencrypt"
-      - "traefik.http.services.${COOLIFY_RESOURCE_UUID:-app}.loadbalancer.server.port=80"
-    restart: unless-stopped
+      - "traefik.http.routers.scv-app.rule=Host(`${COOLIFY_FQDN:-localhost}`)"
+      - "traefik.http.routers.scv-app.entrypoints=http,https"
+      - "traefik.http.routers.scv-app.tls=true"
+      - "traefik.http.routers.scv-app.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scv-app.loadbalancer.server.port=80"
+
+volumes:
+  postgres_data:
 
 networks:
   internal:

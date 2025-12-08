@@ -1,152 +1,164 @@
-import { create } from 'zustand';
+import { create } from 'zustand'
 
 const useStore = create((set, get) => ({
-  // Theme
-  darkMode: true,
-  toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+  // Data state
+  suppliers: [],
+  riskData: [],
+  productComponents: [],
+  loading: false,
+  error: null,
 
-  // Connection status
-  connected: false,
-  setConnected: (connected) => set({ connected }),
-
-  // Process parameters configuration
-  parameters: {},
-  setParameters: (parameters) => set({ parameters }),
-
-  // Manufacturing lines
-  lines: [],
-  setLines: (lines) => set({ lines }),
-
-  // Real-time readings
-  readings: [],
-  addReading: (reading) => set((state) => {
-    const newReadings = [...state.readings, reading];
-    if (newReadings.length > 500) {
-      return { readings: newReadings.slice(-500) };
-    }
-    return { readings: newReadings };
-  }),
-  setReadings: (readings) => set({ readings }),
-
-  // Alerts
-  alerts: [],
-  addAlert: (alert) => set((state) => ({
-    alerts: [alert, ...state.alerts].slice(0, 200)
-  })),
-  setAlerts: (alerts) => set({ alerts }),
-  acknowledgeAlert: (alertId) => set((state) => ({
-    alerts: state.alerts.map(a =>
-      a.id === alertId ? { ...a, acknowledged: true, acknowledgedAt: Date.now() } : a
-    )
-  })),
-  unacknowledgedCount: () => get().alerts.filter(a => !a.acknowledged).length,
-
-  // Batches
-  batches: [],
-  setBatches: (batches) => set({ batches }),
-
-  // Drift analysis results
-  driftResults: {},
-  setDriftResults: (driftResults) => set({ driftResults }),
-
-  // SPC summary
-  spcSummary: {},
-  setSpcSummary: (spcSummary) => set({ spcSummary }),
-
-  // Selected filters
-  selectedLine: 'all',
-  setSelectedLine: (selectedLine) => set({ selectedLine }),
-  selectedParameter: 'temperature',
-  setSelectedParameter: (selectedParameter) => set({ selectedParameter }),
-  timeRange: '1h',
-  setTimeRange: (timeRange) => set({ timeRange }),
-
-  // Statistics
-  statistics: {
-    totalReadings: 0,
-    totalAlerts: 0,
-    unacknowledgedAlerts: 0,
-    activeBatches: 0,
-    outOfSpecPercent: 0,
-    avgYield: 0
-  },
-  setStatistics: (statistics) => set({ statistics }),
+  // Filter state
+  selectedTier: null,
+  selectedCountry: null,
+  selectedRiskLevel: null,
+  searchQuery: '',
 
   // UI state
-  sidebarCollapsed: false,
-  toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-  activePage: 'dashboard',
-  setActivePage: (activePage) => set({ activePage }),
+  darkMode: true,
+  selectedSupplier: null,
+  sidebarOpen: true,
 
-  // Notification preferences
-  notificationsEnabled: true,
-  toggleNotifications: () => set((state) => ({ notificationsEnabled: !state.notificationsEnabled })),
-  soundEnabled: true,
-  toggleSound: () => set((state) => ({ soundEnabled: !state.soundEnabled })),
+  // Actions
+  setSuppliers: (suppliers) => set({ suppliers }),
+  setRiskData: (riskData) => set({ riskData }),
+  setProductComponents: (productComponents) => set({ productComponents }),
+  setLoading: (loading) => set({ loading }),
+  setError: (error) => set({ error }),
 
-  // Get filtered readings
-  getFilteredReadings: () => {
-    const state = get();
-    let filtered = state.readings;
+  // Filter actions
+  setSelectedTier: (tier) => set({ selectedTier: tier }),
+  setSelectedCountry: (country) => set({ selectedCountry: country }),
+  setSelectedRiskLevel: (level) => set({ selectedRiskLevel: level }),
+  setSearchQuery: (query) => set({ searchQuery: query }),
+  clearFilters: () => set({
+    selectedTier: null,
+    selectedCountry: null,
+    selectedRiskLevel: null,
+    searchQuery: ''
+  }),
 
-    if (state.selectedLine !== 'all') {
-      filtered = filtered.filter(r => r.line === state.selectedLine);
+  // UI actions
+  toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+  setSelectedSupplier: (supplier) => set({ selectedSupplier: supplier }),
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+
+  // Computed getters
+  getFilteredSuppliers: () => {
+    const state = get()
+    let filtered = [...state.suppliers]
+
+    if (state.selectedTier !== null) {
+      filtered = filtered.filter(s => s.tier_level === state.selectedTier)
     }
 
-    const now = Date.now();
-    const timeRanges = {
-      '15m': 15 * 60 * 1000,
-      '1h': 60 * 60 * 1000,
-      '4h': 4 * 60 * 60 * 1000,
-      '24h': 24 * 60 * 60 * 1000,
-      '7d': 7 * 24 * 60 * 60 * 1000
-    };
+    if (state.selectedCountry) {
+      filtered = filtered.filter(s => s.site_location_country === state.selectedCountry)
+    }
 
-    const range = timeRanges[state.timeRange] || timeRanges['1h'];
-    filtered = filtered.filter(r => now - r.timestamp < range);
+    if (state.searchQuery) {
+      const query = state.searchQuery.toLowerCase()
+      filtered = filtered.filter(s => 
+        s.supplier_name.toLowerCase().includes(query) ||
+        s.supplier_id.toLowerCase().includes(query)
+      )
+    }
 
-    return filtered;
+    return filtered
   },
 
-  // Get latest reading for each parameter
-  getLatestValues: () => {
-    const readings = get().readings;
-    if (readings.length === 0) return {};
-
-    const latest = readings[readings.length - 1];
-    return latest.parameters || {};
+  getSupplierWithRisk: (supplierId) => {
+    const state = get()
+    const supplier = state.suppliers.find(s => s.supplier_id === supplierId)
+    const risk = state.riskData.find(r => r.supplier_id === supplierId)
+    return { ...supplier, ...risk }
   },
 
-  // Get parameter statistics
-  getParameterStats: (paramName) => {
-    const readings = get().getFilteredReadings();
-    const values = readings.map(r => r.parameters?.[paramName]).filter(v => v !== undefined);
+  getCountryStats: () => {
+    const state = get()
+    const stats = {}
+    
+    state.suppliers.forEach(supplier => {
+      const country = supplier.site_location_country
+      if (!stats[country]) {
+        stats[country] = { count: 0, tier1: 0, tier2: 0, tier3: 0, avgRisk: 0, risks: [] }
+      }
+      stats[country].count++
+      stats[country][`tier${supplier.tier_level}`]++
+      
+      const risk = state.riskData.find(r => r.supplier_id === supplier.supplier_id)
+      if (risk) {
+        stats[country].risks.push(risk.overall_risk_score)
+      }
+    })
 
-    if (values.length === 0) return null;
+    Object.keys(stats).forEach(country => {
+      const risks = stats[country].risks
+      stats[country].avgRisk = risks.length > 0 
+        ? risks.reduce((a, b) => a + b, 0) / risks.length 
+        : 0
+    })
 
-    const sum = values.reduce((a, b) => a + b, 0);
-    const mean = sum / values.length;
-    const sortedValues = [...values].sort((a, b) => a - b);
-    const min = sortedValues[0];
-    const max = sortedValues[sortedValues.length - 1];
-
-    const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
-    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
-    const stdDev = Math.sqrt(variance);
-
-    return { mean, min, max, stdDev, count: values.length };
+    return stats
   },
 
-  // Get alert counts by severity
-  getAlertCounts: () => {
-    const alerts = get().alerts;
-    return {
-      critical: alerts.filter(a => a.severity === 'critical' && !a.acknowledged).length,
-      warning: alerts.filter(a => a.severity === 'warning' && !a.acknowledged).length,
-      info: alerts.filter(a => a.severity === 'info' && !a.acknowledged).length,
-      total: alerts.filter(a => !a.acknowledged).length
-    };
+  getTierStats: () => {
+    const state = get()
+    const stats = { 1: 0, 2: 0, 3: 0 }
+    state.suppliers.forEach(s => {
+      stats[s.tier_level]++
+    })
+    return stats
+  },
+
+  getRiskDistribution: () => {
+    const state = get()
+    const distribution = { low: 0, medium: 0, high: 0, critical: 0 }
+    
+    state.riskData.forEach(risk => {
+      const score = risk.overall_risk_score
+      if (score < 0.4) distribution.low++
+      else if (score < 0.6) distribution.medium++
+      else if (score < 0.8) distribution.high++
+      else distribution.critical++
+    })
+
+    return distribution
+  },
+
+  getSupplierNetwork: () => {
+    const state = get()
+    const nodes = []
+    const links = []
+
+    // Add Diodes Corp as root
+    nodes.push({
+      id: 'DIODES_CORP',
+      name: 'Diodes Inc.',
+      tier: 0,
+      type: 'root'
+    })
+
+    state.suppliers.forEach(supplier => {
+      const risk = state.riskData.find(r => r.supplier_id === supplier.supplier_id)
+      nodes.push({
+        id: supplier.supplier_id,
+        name: supplier.supplier_name,
+        tier: supplier.tier_level,
+        country: supplier.site_location_country,
+        function: supplier.site_function,
+        riskScore: risk?.overall_risk_score || 0
+      })
+
+      links.push({
+        source: supplier.supplies_id,
+        target: supplier.supplier_id,
+        tier: supplier.tier_level
+      })
+    })
+
+    return { nodes, links }
   }
-}));
+}))
 
-export default useStore;
+export default useStore

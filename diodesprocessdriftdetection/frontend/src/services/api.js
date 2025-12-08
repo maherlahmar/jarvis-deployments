@@ -1,214 +1,124 @@
-import {
-  getMockInitData,
-  getMockStatistics,
-  getMockSpcSummary,
-  getMockDriftStatus,
-  getMockReadings,
-  getMockBatches,
-  getMockAlerts
-} from './mockData';
+const API_BASE = '/api'
 
-const API_BASE = '/api';
-
-let useMockData = false;
+let useMockData = false
 
 async function fetchApi(endpoint, options = {}) {
-  const url = `${API_BASE}${endpoint}`;
+  const url = `${API_BASE}${endpoint}`
   try {
     const response = await fetch(url, {
       headers: { 'Content-Type': 'application/json', ...options.headers },
       ...options
-    });
+    })
     if (!response.ok) {
       if (response.status >= 502 && response.status <= 504) {
-        console.warn(`Backend not ready (${response.status}), switching to mock data`);
-        useMockData = true;
-        throw new Error(`Backend starting up (${response.status})`);
+        console.warn(`Backend not ready (${response.status}), using mock data`)
+        throw new Error(`Backend starting up (${response.status})`)
       }
-      throw new Error(`API Error: ${response.status}`);
+      throw new Error(`API Error: ${response.status}`)
     }
-    return await response.json();
+    return await response.json()
   } catch (error) {
-    console.error(`Fetch error for ${endpoint}:`, error);
-    throw error;
+    console.error(`Fetch error for ${endpoint}:`, error)
+    throw error
   }
 }
 
 export const api = {
   // Health check
   health: async () => {
-    if (useMockData) return { status: 'ok', mock: true };
+    if (useMockData) return { status: 'mock' }
     try {
-      return await fetchApi('/health');
+      return await fetchApi('/health')
     } catch {
-      useMockData = true;
-      return { status: 'ok', mock: true };
+      useMockData = true
+      return { status: 'mock' }
     }
   },
 
-  // Parameters
-  getParameters: async () => {
+  // Suppliers
+  getSuppliers: async () => {
     if (useMockData) {
-      const { parameters } = getMockInitData();
-      return { success: true, data: parameters, mock: true };
+      const { getMockSuppliers } = await import('./mockData')
+      return getMockSuppliers()
     }
     try {
-      return await fetchApi('/parameters');
+      return await fetchApi('/suppliers')
     } catch {
-      useMockData = true;
-      const { parameters } = getMockInitData();
-      return { success: true, data: parameters, mock: true };
+      useMockData = true
+      const { getMockSuppliers } = await import('./mockData')
+      return getMockSuppliers()
     }
   },
 
-  // Readings
-  getReadings: async (count = 100) => {
+  getSupplierById: async (id) => {
     if (useMockData) {
-      return { success: true, data: getMockReadings(count), mock: true };
+      const { getMockSupplierById } = await import('./mockData')
+      return getMockSupplierById(id)
     }
     try {
-      return await fetchApi(`/readings?count=${count}`);
+      return await fetchApi(`/suppliers/${id}`)
     } catch {
-      useMockData = true;
-      return { success: true, data: getMockReadings(count), mock: true };
+      const { getMockSupplierById } = await import('./mockData')
+      return getMockSupplierById(id)
     }
   },
 
-  getParameterReadings: async (parameter, count = 100) => {
+  // Risk data
+  getRiskData: async () => {
     if (useMockData) {
-      const readings = getMockReadings(count);
-      const data = readings.map(r => ({
-        timestamp: r.timestamp,
-        value: r.parameters[parameter],
-        line: r.line,
-        spc: r.spcResults?.[parameter]
-      }));
-      return { success: true, data, mock: true };
+      const { getMockRiskData } = await import('./mockData')
+      return getMockRiskData()
     }
     try {
-      return await fetchApi(`/readings/${parameter}?count=${count}`);
+      return await fetchApi('/risk')
     } catch {
-      useMockData = true;
-      const readings = getMockReadings(count);
-      const data = readings.map(r => ({
-        timestamp: r.timestamp,
-        value: r.parameters[parameter],
-        line: r.line,
-        spc: r.spcResults?.[parameter]
-      }));
-      return { success: true, data, mock: true };
+      useMockData = true
+      const { getMockRiskData } = await import('./mockData')
+      return getMockRiskData()
     }
   },
 
-  // Alerts
-  getAlerts: async (count = 50, unacknowledgedOnly = false) => {
+  // Product components
+  getProductComponents: async () => {
     if (useMockData) {
-      let alerts = getMockAlerts();
-      if (unacknowledgedOnly) {
-        alerts = alerts.filter(a => !a.acknowledged);
-      }
-      return { success: true, data: alerts.slice(0, count), mock: true };
+      const { getMockProductComponents } = await import('./mockData')
+      return getMockProductComponents()
     }
     try {
-      const params = new URLSearchParams({ count: count.toString() });
-      if (unacknowledgedOnly) params.append('unacknowledged', 'true');
-      return await fetchApi(`/alerts?${params}`);
+      return await fetchApi('/products')
     } catch {
-      useMockData = true;
-      let alerts = getMockAlerts();
-      if (unacknowledgedOnly) {
-        alerts = alerts.filter(a => !a.acknowledged);
-      }
-      return { success: true, data: alerts.slice(0, count), mock: true };
+      useMockData = true
+      const { getMockProductComponents } = await import('./mockData')
+      return getMockProductComponents()
     }
   },
 
-  acknowledgeAlert: async (id) => {
+  // Analytics
+  getConcentrationAnalysis: async () => {
     if (useMockData) {
-      return { success: true, mock: true };
+      const { getMockConcentrationAnalysis } = await import('./mockData')
+      return getMockConcentrationAnalysis()
     }
     try {
-      return await fetchApi(`/alerts/${id}/acknowledge`, { method: 'POST' });
+      return await fetchApi('/analytics/concentration')
     } catch {
-      return { success: true, mock: true };
+      const { getMockConcentrationAnalysis } = await import('./mockData')
+      return getMockConcentrationAnalysis()
     }
   },
 
-  // Batches
-  getBatches: async () => {
+  getDiversificationRecommendations: async () => {
     if (useMockData) {
-      return { success: true, data: getMockBatches(), mock: true };
+      const { getMockRecommendations } = await import('./mockData')
+      return getMockRecommendations()
     }
     try {
-      return await fetchApi('/batches');
+      return await fetchApi('/analytics/recommendations')
     } catch {
-      useMockData = true;
-      return { success: true, data: getMockBatches(), mock: true };
-    }
-  },
-
-  getBatch: async (id) => {
-    if (useMockData) {
-      const batches = getMockBatches();
-      const batch = batches.find(b => b.id === id);
-      return { success: true, data: batch, mock: true };
-    }
-    try {
-      return await fetchApi(`/batches/${id}`);
-    } catch {
-      useMockData = true;
-      const batches = getMockBatches();
-      const batch = batches.find(b => b.id === id);
-      return { success: true, data: batch, mock: true };
-    }
-  },
-
-  // SPC Summary
-  getSpcSummary: async () => {
-    if (useMockData) {
-      return { success: true, data: getMockSpcSummary(), mock: true };
-    }
-    try {
-      return await fetchApi('/spc/summary');
-    } catch {
-      useMockData = true;
-      return { success: true, data: getMockSpcSummary(), mock: true };
-    }
-  },
-
-  // Drift Status
-  getDriftStatus: async () => {
-    if (useMockData) {
-      return { success: true, data: getMockDriftStatus(), mock: true };
-    }
-    try {
-      return await fetchApi('/drift/status');
-    } catch {
-      useMockData = true;
-      return { success: true, data: getMockDriftStatus(), mock: true };
-    }
-  },
-
-  // Statistics
-  getStatistics: async () => {
-    if (useMockData) {
-      return { success: true, data: getMockStatistics(), mock: true };
-    }
-    try {
-      return await fetchApi('/statistics');
-    } catch {
-      useMockData = true;
-      return { success: true, data: getMockStatistics(), mock: true };
+      const { getMockRecommendations } = await import('./mockData')
+      return getMockRecommendations()
     }
   }
-};
-
-export function isUsingMockData() {
-  return useMockData;
 }
 
-export function setUseMockData(value) {
-  useMockData = value;
-}
-
-export default api;
+export default api

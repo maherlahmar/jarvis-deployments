@@ -1,63 +1,70 @@
-# Diodes Process Variation & Drift Detection System
+# Supply Chain Visibility Platform - Diodes Inc.
 
-Real-time monitoring and drift detection system for analog IC manufacturing processes. Designed to address process sensitivity issues in temperature, pressure, and chemical concentrations that impact Diodes' 28-32% gross margin targets.
+Multi-tier supply chain visibility and mapping application for monitoring suppliers across all tiers, identifying geographic concentration risks, and providing diversification recommendations.
 
 ## Features
 
-### Real-Time Monitoring
-- Live parameter tracking with control charts
-- 8 critical process parameters monitored simultaneously
-- Multi-line manufacturing support (Lines A-D)
-- 2-second update intervals
+### Dashboard
+- Executive summary with key metrics and KPIs
+- Tier distribution visualization (Tier 1, 2, 3 suppliers)
+- Geographic concentration analysis by country
+- Risk distribution overview
+- High-risk supplier alerts
 
-### Drift Detection Algorithms
-- **CUSUM (Cumulative Sum)**: Detects sustained small shifts
-- **EWMA (Exponentially Weighted Moving Average)**: Sensitive to gradual changes
-- **Trend Analysis**: Linear regression for drift prediction
-- **Process Shift Detection**: Identifies sudden mean changes
+### Interactive Supply Chain Map
+- Geographic visualization of all suppliers using Leaflet
+- Color-coded markers by tier level
+- Risk indicators via marker borders
+- Interactive popups with supplier details
+- Filtering by tier, country, and risk level
 
-### Statistical Process Control
-- X-bar and Moving Range charts
-- Control limits (UCL/LCL) and Specification limits (USL/LSL)
-- Process capability indices (Cp, Cpk, Ppk)
-- Western Electric rules for pattern detection
+### Network View
+- D3.js force-directed graph visualization
+- Hierarchical radial layout by tier
+- Interactive node selection with detail panel
+- Zoom and pan capabilities
+- Filter by specific tiers
 
-### Alert Management
-- Real-time alerts for out-of-control conditions
-- Severity levels: Critical, Warning, Info
-- Alert cooldown to prevent notification fatigue
-- Recommended actions for each alert type
+### Risk Alerts
+- Comprehensive risk monitoring dashboard
+- Multi-factor risk scoring (geopolitical, natural disaster, water scarcity)
+- ESG audit score tracking
+- Single-source dependency identification
+- Sortable and filterable risk table
 
-### Batch Tracking
-- Production batch monitoring
-- Yield analysis by line and product
-- Defect tracking and correlation
-- Historical batch performance
+### Product Dependencies
+- Component-to-supplier mapping
+- Criticality tracking (High/Medium)
+- Volume analysis
+- Risk exposure by product
+- Expandable component details
 
-### Reports & Analytics
-- SPC summary reports
-- Capability index comparisons
-- Yield impact analysis
-- Export to JSON format
+### Diversification Recommendations
+- AI-generated strategic recommendations
+- Priority-based action items
+- Risk reduction estimates
+- Implementation guidance
+- Impact assessment
 
-## Process Parameters Monitored
+## Technology Stack
 
-| Parameter | Target | UCL/LCL | USL/LSL | Unit |
-|-----------|--------|---------|---------|------|
-| Temperature | 25.0 | 27.0/23.0 | 28.0/22.0 | C |
-| Chamber Pressure | 100.0 | 105.0/95.0 | 110.0/90.0 | mTorr |
-| Gas Flow Rate | 50.0 | 52.0/48.0 | 55.0/45.0 | sccm |
-| RF Power | 300.0 | 310.0/290.0 | 320.0/280.0 | W |
-| Etch Rate | 150.0 | 158.0/142.0 | 165.0/135.0 | nm/min |
-| Uniformity | 2.0 | 2.5/0.5 | 3.0/0.0 | % |
-| Deposition Thickness | 100.0 | 104.0/96.0 | 108.0/92.0 | nm |
-| Humidity | 45.0 | 48.0/42.0 | 50.0/40.0 | %RH |
+### Frontend
+- React 18 with Vite
+- TailwindCSS for styling
+- Zustand for state management
+- Recharts for charts
+- Leaflet + React-Leaflet for maps
+- D3.js for network visualization
 
-## Tech Stack
+### Backend
+- Node.js + Express
+- PostgreSQL database
+- RESTful API
 
-- **Frontend**: React 18, Vite, TailwindCSS, Recharts, Zustand
-- **Backend**: Node.js, Express, WebSocket (ws)
-- **Deployment**: Docker, nginx, Coolify-ready
+### Deployment
+- Docker + Docker Compose
+- Nginx reverse proxy
+- Coolify-ready configuration
 
 ## Quick Start
 
@@ -69,98 +76,97 @@ cd frontend
 npm install
 npm run dev
 
-# Backend (separate terminal)
+# Backend (requires PostgreSQL)
 cd backend
 npm install
-npm start
+npm run dev
 ```
 
-Frontend: http://localhost:3000
-Backend API: http://localhost:8000
-
-### Production Build
+### Production (Docker)
 
 ```bash
-cd frontend
-npm run build
-```
-
-### Docker Deployment
-
-```bash
-docker-compose up --build
-```
-
-## Project Structure
-
-```
-diodes-process-drift-detection/
-├── frontend/
-│   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── pages/          # Route pages
-│   │   ├── services/       # API & WebSocket services
-│   │   ├── store/          # Zustand state management
-│   │   ├── utils/          # Helper functions
-│   │   └── styles/         # Global CSS
-│   ├── Dockerfile
-│   └── nginx.conf
-├── backend/
-│   ├── src/
-│   │   └── services/       # Business logic
-│   ├── server.js
-│   └── Dockerfile
-├── docker-compose.yml
-└── README.md
+docker-compose up -d
 ```
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/health | Health check |
-| GET | /api/parameters | Get parameter configurations |
-| GET | /api/readings | Get recent readings |
-| GET | /api/readings/:param | Get readings for specific parameter |
-| GET | /api/alerts | Get alerts |
-| POST | /api/alerts/:id/acknowledge | Acknowledge alert |
-| GET | /api/batches | Get batch history |
-| GET | /api/spc/summary | Get SPC summary statistics |
-| GET | /api/drift/status | Get drift detection results |
-| GET | /api/statistics | Get system statistics |
+- `GET /api/health` - Health check
+- `GET /api/suppliers` - List all suppliers (filterable)
+- `GET /api/suppliers/:id` - Get supplier details with risk
+- `GET /api/risk` - Get risk monitoring data
+- `GET /api/products` - Get product components
+- `GET /api/analytics/concentration` - Geographic concentration analysis
+- `GET /api/analytics/recommendations` - Diversification recommendations
+- `GET /api/network` - Supply chain network graph data
+- `GET /api/alerts` - High-risk supplier alerts
 
-## WebSocket Events
+## Data Model
 
-| Event | Direction | Description |
-|-------|-----------|-------------|
-| INIT | Server -> Client | Initial data on connection |
-| READING | Server -> Client | New process reading |
-| NEW_ALERT | Server -> Client | New alert generated |
-| ALERT_UPDATED | Server -> Client | Alert status changed |
+### Suppliers
+- Supplier ID, Name, Tier Level
+- Location (Country, City, Lat/Long)
+- Site Function
+- Supply Chain Relationships
 
-## Drift Detection Methods
+### Risk Monitoring
+- Geopolitical Risk Index
+- Natural Disaster Risk Index
+- Water Scarcity Index
+- Overall Risk Score
+- ESG Audit Score
+- Alternative Source Count
 
-### CUSUM (Cumulative Sum Control Chart)
-- Slack parameter (K): 0.5
-- Decision interval (H): 5.0
-- Detects small sustained shifts (~0.5-1.0 sigma)
-
-### EWMA (Exponentially Weighted Moving Average)
-- Smoothing factor (lambda): 0.2
-- Control limit width (L): 3.0
-- Sensitive to gradual process changes
-
-### Trend Analysis
-- Window size: 50 readings
-- Significance threshold: R-squared > 0.3
-- Projects drift 100 readings ahead
+### Product Components
+- Diodes SKU
+- Component Name
+- Supplier ID
+- Annual Volume
+- Criticality Flag
 
 ## Environment Variables
 
 ### Backend
-- `PORT`: Server port (default: 8000)
-- `NODE_ENV`: Environment (production/development)
+- `PORT` - Server port (default: 8000)
+- `DB_HOST` - PostgreSQL host
+- `DB_PORT` - PostgreSQL port
+- `DB_NAME` - Database name
+- `DB_USER` - Database user
+- `DB_PASSWORD` - Database password
 
-### Frontend (Coolify)
-- `COOLIFY_FQDN`: Domain name for deployment
-- `COOLIFY_RESOURCE_UUID`: Resource identifier
+## Architecture
+
+```
+supply-chain-visibility/
+├── docker-compose.yml
+├── frontend/
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── store/
+│   │   └── styles/
+│   └── package.json
+├── backend/
+│   ├── Dockerfile
+│   ├── server.js
+│   └── src/
+│       └── utils/
+│           └── initDb.js
+└── README.md
+```
+
+## Key Insights from Data
+
+1. **Geographic Concentration Risk**: Taiwan and China represent significant concentration with high geopolitical risk indices
+2. **Single Source Dependencies**: Multiple suppliers have no alternatives (alternative_source_count = 0)
+3. **Natural Disaster Exposure**: Japan suppliers show high natural disaster risk due to seismic activity
+4. **ESG Compliance Gaps**: Vietnam suppliers show lower ESG audit scores requiring improvement programs
+
+## Deployment Notes
+
+- Uses relative asset paths (`base: './'`) for Coolify/Docker compatibility
+- No internal Docker healthchecks (managed externally by Coolify)
+- Uses `expose` instead of `ports` for container networking
+- Nginx proxies `/api/*` requests to backend service

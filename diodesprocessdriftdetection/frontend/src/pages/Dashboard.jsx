@@ -1,217 +1,315 @@
-import { useEffect, useState } from 'react';
-import {
-  Activity,
-  AlertTriangle,
-  CheckCircle,
+import { useState, useEffect } from 'react'
+import { 
+  Building2, 
+  Globe, 
+  AlertTriangle, 
   TrendingUp,
-  Package,
-  Gauge,
-  BarChart3,
-  Target
-} from 'lucide-react';
-import useStore from '../store/useStore';
-import { api } from '../services/api';
-import StatCard from '../components/StatCard';
-import ParameterCard from '../components/ParameterCard';
-import ControlChart from '../components/ControlChart';
-import AlertList from '../components/AlertList';
-import { formatPercent, formatUptime } from '../utils/formatters';
+  Shield,
+  Layers
+} from 'lucide-react'
+import { 
+  PieChart, 
+  Pie, 
+  Cell, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  ResponsiveContainer,
+  Legend
+} from 'recharts'
+import useStore from '../store/useStore'
+import api from '../services/api'
 
-function Dashboard() {
-  const {
-    parameters,
-    readings,
-    selectedParameter,
-    setSelectedParameter,
-    getAlertCounts,
-    setStatistics,
-    statistics
-  } = useStore();
+const TIER_COLORS = {
+  1: '#3b82f6',
+  2: '#8b5cf6',
+  3: '#14b8a6'
+}
 
-  const alertCounts = getAlertCounts();
+const RISK_COLORS = {
+  low: '#22c55e',
+  medium: '#eab308',
+  high: '#f97316',
+  critical: '#ef4444'
+}
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await api.getStatistics();
-        if (response.success) {
-          setStatistics(response.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch statistics:', error);
-      }
-    };
-
-    fetchStats();
-    const interval = setInterval(fetchStats, 30000);
-    return () => clearInterval(interval);
-  }, [setStatistics]);
-
-  const parameterKeys = Object.keys(parameters);
-  const currentReading = readings[readings.length - 1];
-
-  const processHealth = alertCounts.critical > 0 ? 'critical' :
-    alertCounts.warning > 0 ? 'warning' : 'normal';
+function StatCard({ icon: Icon, label, value, subValue, color = 'primary' }) {
+  const colorClasses = {
+    primary: 'from-primary-500/20 to-primary-600/20 border-primary-500/30',
+    green: 'from-green-500/20 to-green-600/20 border-green-500/30',
+    yellow: 'from-yellow-500/20 to-yellow-600/20 border-yellow-500/30',
+    red: 'from-red-500/20 to-red-600/20 border-red-500/30'
+  }
 
   return (
-    <div className="space-y-6 animate-in">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Process Health"
-          value={processHealth === 'normal' ? 'Stable' : processHealth === 'warning' ? 'Warning' : 'Critical'}
-          subtitle={`${readings.length} readings in buffer`}
-          icon={processHealth === 'normal' ? CheckCircle : AlertTriangle}
-          status={processHealth}
-        />
-        <StatCard
-          title="Active Alerts"
-          value={alertCounts.total}
-          subtitle={`${alertCounts.critical} critical, ${alertCounts.warning} warnings`}
-          icon={AlertTriangle}
-          status={alertCounts.critical > 0 ? 'danger' : alertCounts.warning > 0 ? 'warning' : 'success'}
-        />
-        <StatCard
-          title="Avg Yield"
-          value={formatPercent(statistics.avgYield)}
-          subtitle="Last 10 batches"
-          icon={Target}
-          status={parseFloat(statistics.avgYield) >= 90 ? 'success' : parseFloat(statistics.avgYield) >= 85 ? 'warning' : 'danger'}
-        />
-        <StatCard
-          title="Out of Spec"
-          value={formatPercent(statistics.outOfSpecPercent)}
-          subtitle="Recent readings"
-          icon={Gauge}
-          status={parseFloat(statistics.outOfSpecPercent) <= 2 ? 'success' : parseFloat(statistics.outOfSpecPercent) <= 5 ? 'warning' : 'danger'}
-        />
+    <div className={'card p-6 bg-gradient-to-br border ' + colorClasses[color]}>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-gray-400 text-sm">{label}</p>
+          <p className="text-3xl font-bold text-white mt-1">{value}</p>
+          {subValue && <p className="text-sm text-gray-400 mt-1">{subValue}</p>}
+        </div>
+        <div className="p-3 rounded-lg bg-gray-700/50">
+          <Icon className="w-6 h-6 text-gray-300" />
+        </div>
       </div>
+    </div>
+  )
+}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="card">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-slate-900 dark:text-white">
-                    Control Chart: {parameters[selectedParameter]?.name || selectedParameter}
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Real-time process monitoring with control limits
-                  </p>
-                </div>
-                <select
-                  value={selectedParameter}
-                  onChange={(e) => setSelectedParameter(e.target.value)}
-                  className="select w-48"
-                >
-                  {parameterKeys.map(key => (
-                    <option key={key} value={key}>
-                      {parameters[key]?.name}
-                    </option>
-                  ))}
-                </select>
+function ConcentrationChart({ data }) {
+  const chartData = data.slice(0, 8).map(function(item) {
+    return {
+      name: item.country,
+      suppliers: parseInt(item.supplierCount || item.supplier_count || 0),
+      risk: parseFloat(item.avgRiskScore || item.avg_risk_score || 0) * 100
+    }
+  })
+
+  return (
+    <div className="card p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Geographic Concentration</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={chartData} layout="vertical">
+          <XAxis type="number" stroke="#9ca3af" />
+          <YAxis type="category" dataKey="name" stroke="#9ca3af" width={80} />
+          <Tooltip 
+            contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
+            labelStyle={{ color: '#fff' }}
+          />
+          <Bar dataKey="suppliers" fill="#3b82f6" name="Suppliers" radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function TierDistribution({ tierStats }) {
+  const data = [
+    { name: 'Tier 1', value: tierStats[1] || 0, color: TIER_COLORS[1] },
+    { name: 'Tier 2', value: tierStats[2] || 0, color: TIER_COLORS[2] },
+    { name: 'Tier 3', value: tierStats[3] || 0, color: TIER_COLORS[3] }
+  ]
+
+  return (
+    <div className="card p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Tier Distribution</h3>
+      <ResponsiveContainer width="100%" height={250}>
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={90}
+            paddingAngle={5}
+            dataKey="value"
+          >
+            {data.map(function(entry, index) {
+              return <Cell key={index} fill={entry.color} />
+            })}
+          </Pie>
+          <Tooltip 
+            contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
+          />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function RiskDistributionChart({ riskDist }) {
+  const data = [
+    { name: 'Low', value: riskDist.low, color: RISK_COLORS.low },
+    { name: 'Medium', value: riskDist.medium, color: RISK_COLORS.medium },
+    { name: 'High', value: riskDist.high, color: RISK_COLORS.high },
+    { name: 'Critical', value: riskDist.critical, color: RISK_COLORS.critical }
+  ]
+
+  return (
+    <div className="card p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Risk Distribution</h3>
+      <ResponsiveContainer width="100%" height={250}>
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={90}
+            paddingAngle={5}
+            dataKey="value"
+          >
+            {data.map(function(entry, index) {
+              return <Cell key={index} fill={entry.color} />
+            })}
+          </Pie>
+          <Tooltip 
+            contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
+          />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function TopRisksTable({ risks }) {
+  const topRisks = risks
+    .filter(function(r) { return r.overall_risk_score >= 0.7 })
+    .sort(function(a, b) { return b.overall_risk_score - a.overall_risk_score })
+    .slice(0, 5)
+
+  return (
+    <div className="card p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">High Risk Suppliers</h3>
+      <div className="space-y-3">
+        {topRisks.map(function(risk) {
+          const riskClass = risk.overall_risk_score >= 0.9 ? 'text-red-400' : 'text-orange-400'
+          return (
+            <div key={risk.supplier_id} className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+              <div>
+                <p className="font-medium text-white">{risk.supplier_id}</p>
+                <p className="text-sm text-gray-400">{risk.site_location_country}</p>
+              </div>
+              <div className="text-right">
+                <p className={'font-bold ' + riskClass}>
+                  {(risk.overall_risk_score * 100).toFixed(0)}%
+                </p>
+                <p className="text-xs text-gray-400">Risk Score</p>
               </div>
             </div>
-            <div className="p-4">
-              <ControlChart paramKey={selectedParameter} height={350} />
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-            <h3 className="font-semibold text-slate-900 dark:text-white">Recent Alerts</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Unacknowledged process alerts
-            </p>
-          </div>
-          <div className="p-4 max-h-[400px] overflow-y-auto scrollbar-thin">
-            <AlertList limit={8} />
-          </div>
-        </div>
+          )
+        })}
+        {topRisks.length === 0 && (
+          <p className="text-gray-400 text-center py-4">No high risk suppliers</p>
+        )}
       </div>
+    </div>
+  )
+}
 
+export default function Dashboard() {
+  const suppliers = useStore(function(state) { return state.suppliers })
+  const riskData = useStore(function(state) { return state.riskData })
+  const getTierStats = useStore(function(state) { return state.getTierStats })
+  const getRiskDistribution = useStore(function(state) { return state.getRiskDistribution })
+  
+  const [concentration, setConcentration] = useState([])
+
+  const tierStats = getTierStats()
+  const riskDist = getRiskDistribution()
+  const uniqueCountries = [...new Set(suppliers.map(function(s) { return s.site_location_country }))].length
+
+  useEffect(function() {
+    async function loadConcentration() {
+      try {
+        const res = await api.getConcentrationAnalysis()
+        if (res.success) {
+          setConcentration(res.data)
+        }
+      } catch (err) {
+        console.error('Error loading concentration:', err)
+      }
+    }
+    loadConcentration()
+  }, [])
+
+  const avgRisk = riskData.length > 0 
+    ? riskData.reduce(function(sum, r) { return sum + (r.overall_risk_score || 0) }, 0) / riskData.length 
+    : 0
+
+  const criticalSuppliers = riskData.filter(function(r) { return r.overall_risk_score >= 0.9 }).length
+  const noAlternatives = riskData.filter(function(r) { return r.alternative_source_count === 0 }).length
+
+  const taiwanChinaCount = concentration
+    .filter(function(c) { return c.country === 'Taiwan' || c.country === 'China' })
+    .reduce(function(sum, c) { return sum + parseInt(c.supplierCount || c.supplier_count || 0) }, 0)
+
+  return (
+    <div className="space-y-6">
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white">Process Parameters</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Click a parameter to view its control chart
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
-          {parameterKeys.map(key => (
-            <ParameterCard
-              key={key}
-              paramKey={key}
-              onClick={setSelectedParameter}
-            />
-          ))}
-        </div>
+        <h1 className="text-2xl font-bold text-white">Supply Chain Dashboard</h1>
+        <p className="text-gray-400 mt-1">Overview of multi-tier supplier network and risk exposure</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card p-4">
-          <h3 className="font-semibold text-slate-900 dark:text-white mb-4">System Status</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700">
-              <span className="text-sm text-slate-600 dark:text-slate-400">System Uptime</span>
-              <span className="text-sm font-medium text-slate-900 dark:text-white">
-                {formatUptime(statistics.uptime || 0)}
-              </span>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          icon={Building2}
+          label="Total Suppliers"
+          value={suppliers.length}
+          subValue={'Across ' + uniqueCountries + ' countries'}
+          color="primary"
+        />
+        <StatCard
+          icon={Layers}
+          label="Tier 1 Suppliers"
+          value={tierStats[1] || 0}
+          subValue="Direct suppliers"
+          color="primary"
+        />
+        <StatCard
+          icon={AlertTriangle}
+          label="Critical Risk"
+          value={criticalSuppliers}
+          subValue="Score > 90%"
+          color="red"
+        />
+        <StatCard
+          icon={Shield}
+          label="No Alternatives"
+          value={noAlternatives}
+          subValue="Single source risk"
+          color="yellow"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ConcentrationChart data={concentration} />
+        <TierDistribution tierStats={tierStats} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <RiskDistributionChart riskDist={riskDist} />
+        <TopRisksTable risks={riskData} />
+      </div>
+
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">Key Insights</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+              <span className="font-medium text-red-400">Geographic Risk</span>
             </div>
-            <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700">
-              <span className="text-sm text-slate-600 dark:text-slate-400">Total Readings</span>
-              <span className="text-sm font-medium text-slate-900 dark:text-white">
-                {statistics.totalReadings?.toLocaleString() || 0}
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700">
-              <span className="text-sm text-slate-600 dark:text-slate-400">Active Batches</span>
-              <span className="text-sm font-medium text-slate-900 dark:text-white">
-                {statistics.activeBatches || 0}
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-sm text-slate-600 dark:text-slate-400">Total Alerts</span>
-              <span className="text-sm font-medium text-slate-900 dark:text-white">
-                {statistics.totalAlerts || 0}
-              </span>
-            </div>
+            <p className="text-sm text-gray-300">
+              Taiwan and China concentration poses significant geopolitical risk with combined {taiwanChinaCount} suppliers.
+            </p>
           </div>
-        </div>
-
-        <div className="card p-4">
-          <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Manufacturing Lines</h3>
-          <div className="space-y-3">
-            {['Line A', 'Line B', 'Line C', 'Line D'].map(line => {
-              const lineReadings = readings.filter(r => r.line === line);
-              const hasIssues = lineReadings.some(r =>
-                Object.values(r.spcResults || {}).some(s => s.outOfControl || s.outOfSpec)
-              );
-
-              return (
-                <div key={line} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${hasIssues ? 'bg-warning-500' : 'bg-success-500'}`} />
-                    <span className="text-sm text-slate-600 dark:text-slate-400">{line}</span>
-                  </div>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                    hasIssues
-                      ? 'bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400'
-                      : 'bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400'
-                  }`}>
-                    {hasIssues ? 'Attention' : 'Normal'}
-                  </span>
-                </div>
-              );
-            })}
+          <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Globe className="w-5 h-5 text-yellow-400" />
+              <span className="font-medium text-yellow-400">Diversification Needed</span>
+            </div>
+            <p className="text-sm text-gray-300">
+              {noAlternatives} suppliers have no alternative sources, creating single-point-of-failure risks.
+            </p>
+          </div>
+          <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-5 h-5 text-blue-400" />
+              <span className="font-medium text-blue-400">Average Risk</span>
+            </div>
+            <p className="text-sm text-gray-300">
+              Overall supply chain risk score is {(avgRisk * 100).toFixed(1)}%. 
+              Focus on {riskDist.high + riskDist.critical} high/critical risk suppliers.
+            </p>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
-
-export default Dashboard;
